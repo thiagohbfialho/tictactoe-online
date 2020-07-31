@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Tic Tae Toe</string>
+    <string name="guestName">Guest</string>
 </resources>

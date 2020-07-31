@@ -1,6 +1,7 @@
 package com.thbf.android.tictaetoeonline
 
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.Toast
@@ -18,14 +19,26 @@ import kotlin.collections.HashMap
 
 class MainActivity : AppCompatActivity() {
 
-    //database
+    //Database
     private var database = FirebaseDatabase.getInstance()
     private var myRef = database.reference
 
-    var myEmail:String?=null
-
-    //analytics
+    //Analytics
     private var mFirebaseAnalytics: FirebaseAnalytics? = null
+
+    //Player
+    var myEmail:String?=null
+    var activePlayer:Int?=null
+    var playerRequest:Boolean?=false
+    var guestEmail:String?=null
+
+    //Game
+    var jogoAtivo:Boolean = false
+    var player1 = ArrayList<Int>()
+    var player2 = ArrayList<Int>()
+    var player1WinsCount = 0
+    var player2WinsCount = 0
+    var sessionID:String?=null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,17 +50,38 @@ class MainActivity : AppCompatActivity() {
         myEmail = b!!.getString("email")
 
         incomingCalls()
-
-        //updateScore()
     }
 
-    var activePlayer = 1
+    fun startGame(){
+        activePlayer = 1
 
-    var player1 = ArrayList<Int>()
-    var player2 = ArrayList<Int>()
+        player1.clear()
+        player2.clear()
 
-    //var player1WinsCount = 0
-    //var player2WinsCount = 0
+        for(index in 1..9){
+            var buSelected:Button = when(index){
+                1 -> button1
+                2 -> button2
+                3 -> button3
+                4 -> button4
+                5 -> button5
+                6 -> button6
+                7 -> button7
+                8 -> button8
+                9 -> button9
+                else -> {button1}
+            }
+            buSelected.text = ""
+            buSelected.setBackgroundResource(R.color.white)
+            buSelected.isEnabled = true
+        }
+        updateScore()
+        jogoAtivo = true
+    }
+
+    fun cleanGame(){
+        myRef.child("PlayerOnline").removeValue()
+    }
 
     fun buClick(view:View){
         val buSelect = view as Button
@@ -66,14 +100,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         //playGame(cellId,buSelect)
-
-        myRef.child("PlayerOnline").child(sessionID!!).child(cellId.toString()).setValue(myEmail)
+        if((playerRequest!! && activePlayer==1) || (!playerRequest!! && activePlayer==2)){
+            myRef.child("PlayerOnline").child(sessionID!!).child(cellId.toString()).setValue(myEmail)
+        }
 
     }
 
     fun playGame(cellId: Int, buSelected:Button){
 
-        if(activePlayer==1){
+        if(activePlayer == 1){
             buSelected.text = "X"
             buSelected.setBackgroundResource(R.color.blue)
             player1.add(cellId)
@@ -146,51 +181,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         if(winner ==1 || winner == 2){
-//            if(winner==1){
-//                player1WinsCount++
-//            }else{
-//                player2WinsCount++
-//            }
+            if(winner==1){
+                player1WinsCount++
+            }else{
+                player2WinsCount++
+            }
+            jogoAtivo = false
+            cleanGame()
             Toast.makeText(this, "Player $winner win the game! ",Toast.LENGTH_SHORT).show()
-            //restartGame()
+            startGame()
             return true
         }
         return false
     }
 
     fun autoPlay(cellId: Int){
-
-//        var emptyCells = ArrayList<Int>()
-//
-//        for(cellId in 1..9){
-//            if( !(player1.contains(cellId) || player2.contains(cellId)) ){
-//                emptyCells.add(cellId)
-//            }
-//        }
-//
-//        if(emptyCells.size>0){
-//            val r = Random()
-//            val randIndex = r.nextInt(emptyCells.size)
-//            val cellId = emptyCells[randIndex]
-//
-//            var buSelected:Button
-//            buSelected = when(cellId){
-//                1 -> button1
-//                2 -> button2
-//                3 -> button3
-//                4 -> button4
-//                5 -> button5
-//                6 -> button6
-//                7 -> button7
-//                8 -> button8
-//                9 -> button9
-//                else -> {button1}
-//            }
-//
-//            playGame(cellId,buSelected)
-//        }else{
-//            restartGame()
-//        }
 
         var buSelected:Button
         buSelected = when(cellId){
@@ -209,81 +214,64 @@ class MainActivity : AppCompatActivity() {
         playGame(cellId,buSelected)
     }
 
-    fun restartGame(){
-        activePlayer = 1
 
-        player1.clear()
-        player2.clear()
 
-        for(index in 1..9){
-            var buSelected:Button = when(index){
-                1 -> button1
-                2 -> button2
-                3 -> button3
-                4 -> button4
-                5 -> button5
-                6 -> button6
-                7 -> button7
-                8 -> button8
-                9 -> button9
-                else -> {button1}
-            }
-            buSelected.text = ""
-            buSelected.setBackgroundResource(R.color.white)
-            buSelected.isEnabled = true
-        }
-
-        //updateScore()
+    fun updateScore(){
+        scoreP1.text = "${player1WinsCount.toString()}"
+        scoreP2.text = "${player2WinsCount.toString()}"
     }
 
-//    fun updateScore(){
-//        scoreP1.text = "P1 - ${player1WinsCount.toString()}"
-//        scoreP2.text = "P2 - ${player2WinsCount.toString()}"
-//    }
-
     fun buRequestEvent(view: View){
-        var userEmail = etEmail.text.toString()
-        myRef.child("Users").child(SplitString(userEmail)).child("Request").push().setValue(myEmail)
 
-        playerOnline(SplitString(myEmail!!)+SplitString(userEmail))
-        playerSymbol = "X"
+        cleanGame()
+
+        playerRequest = true
+        tvNameP1.text = SplitString(myEmail!!)
+        guestEmail = SplitString(etEmail.text.toString())
+        myRef.child("Users").child(guestEmail!!).child("Request").push().setValue(myEmail)
+
+        playerOnline(SplitString(myEmail!!)+guestEmail)
+        etEmail.setText("")
     }
 
     fun buAcceptEvent(view: View){
-        var userEmail = etEmail.text.toString()
-        myRef.child("Users").child(SplitString(userEmail)).child("Request").push().setValue(myEmail)
 
-        playerOnline(SplitString(userEmail)+SplitString(myEmail!!))
-        playerSymbol = "O"
+        guestEmail = SplitString(etEmail.text.toString())
+        myRef.child("Users").child(guestEmail!!).child("Request").push().setValue(myEmail)
+
+        playerOnline(guestEmail!!+SplitString(myEmail!!))
+
+        tvNameP1.text = guestEmail
+        tvNameP2.text = SplitString(myEmail!!)
+        etEmail.setText("")
+        startGame()
+
     }
-
-    var sessionID:String?=null
-    var playerSymbol:String?=null
 
     fun playerOnline(sessionID:String){
         this.sessionID = sessionID
-        myRef.child("PlayerOnline").removeValue()
         myRef.child("PlayerOnline").child(sessionID)
             .addValueEventListener(object:ValueEventListener{
                 override fun onDataChange(dataSnapshot: DataSnapshot) {
                     try {
-                        player1.clear()
-                        player2.clear()
-                        val td = dataSnapshot.value as HashMap<String,Any>
-                        if (td!=null){
-                            var value:String
-                            for (Key in td.keys){
-                                value = td[Key] as String
-
-                                if (value!=myEmail){
-                                    activePlayer = if(playerSymbol==="X") 1 else 2
-                                }else{
-                                    activePlayer = if(playerSymbol==="X") 2 else 1
-                                }
-
-                                autoPlay(Key.toInt())
-                            }
+                        if(!dataSnapshot.exists()){
+                            startGame()
                         }
+
+                        for (postSnapshot in dataSnapshot.children) {
+                            val keySnap = postSnapshot.getKey()
+                            val valueSnap = postSnapshot.getValue()
+
+                            if (valueSnap!=myEmail){
+                                activePlayer = if(playerRequest!!) 2 else 1
+                            }else{
+                                activePlayer = if(playerRequest!!) 1 else 2
+                            }
+
+                            if(jogoAtivo) autoPlay(keySnap!!.toInt())
+
+                        }
+
                     }catch (ex:Exception){}
                 }
 
@@ -296,19 +284,22 @@ class MainActivity : AppCompatActivity() {
     fun incomingCalls(){
         myRef.child("Users").child(SplitString(myEmail!!)).child("Request")
             .addValueEventListener(object:ValueEventListener{
-                override fun onCancelled(p0: DatabaseError) {
-                }
-
                 override fun onDataChange(dataSnapshot: DataSnapshot) {
                     try {
-                        var td = dataSnapshot.value as HashMap<String,Any>
+                        val td = dataSnapshot!!.value as HashMap<String,Any>
                         if (td!=null){
                             var value:String
                             for (Key in td.keys){
                                 value = td[Key] as String
-                                etEmail.setText(value)
 
                                 myRef.child("Users").child(SplitString(myEmail!!)).child("Request").setValue(true)
+
+                                if(SplitString(value).equals(guestEmail)){
+                                    tvNameP2.text = guestEmail
+                                    startGame()
+                                }else{
+                                    etEmail.setText(value)
+                                }
 
                                 break
                             }
@@ -316,6 +307,9 @@ class MainActivity : AppCompatActivity() {
                     }catch (ex:Exception){
 
                     }
+                }
+
+                override fun onCancelled(p0: DatabaseError) {
                 }
 
             })
